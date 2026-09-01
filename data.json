@@ -1,0 +1,12 @@
+{
+  "mapImage": "school-map.jpg",
+  "calibration": {
+    "pointA": { "lat": 31.9390, "lng": 34.8360, "xPercent": 5,  "yPercent": 5  },
+    "pointB": { "lat": 31.9380, "lng": 34.8370, "xPercent": 95, "yPercent": 95 }
+  },
+  "rooms": [
+    { "id": "214", "name": "חדר 214", "xPercent": 62, "yPercent": 30 },
+    { "id": "118", "name": "חדר 118", "xPercent": 25, "yPercent": 55 },
+    { "id": "מזכירות", "name": "מזכירות", "xPercent": 45, "yPercent": 12 }
+  ]
+}

@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ניהול מפת בית הספר</title>
+<style>
+  :root{
+    --bg:#12181f; --panel:#1b232c; --accent:#4fb0ff; --accent2:#ff5d5d;
+    --text:#e8edf2; --muted:#8a97a3;
+  }
+  *{box-sizing:border-box;}
+  body{ margin:0; font-family:-apple-system,"Segoe UI",Roboto,sans-serif; background:var(--bg); color:var(--text); }
+  header{ padding:16px; text-align:center; }
+  header h1{ margin:0 0 4px; font-size:20px; }
+  header p{ margin:0; color:var(--muted); font-size:13px; }
+
+  #loginScreen{ max-width:340px; margin:60px auto; padding:20px; background:var(--panel); border-radius:14px; border:1px solid #2c3945; }
+  #loginScreen input{ width:100%; padding:10px 12px; border-radius:10px; border:1px solid #2c3945; background:#0c1116; color:var(--text); font-size:15px; margin-bottom:10px; }
+  #loginScreen button{ width:100%; padding:10px; border-radius:10px; border:none; background:var(--accent); color:#08141d; font-weight:600; }
+  #loginError{ color:var(--accent2); font-size:13px; margin-top:8px; display:none; }
+
+  main{ display:none; max-width:640px; margin:0 auto; padding:0 16px 60px; }
+  section{ background:var(--panel); border:1px solid #2c3945; border-radius:14px; padding:16px; margin-bottom:16px; }
+  section h2{ font-size:15px; margin:0 0 12px; }
+  label{ display:block; font-size:13px; color:var(--muted); margin:10px 0 4px; }
+  input[type=text], input[type=number], input[type=file]{
+    width:100%; padding:9px 10px; border-radius:8px; border:1px solid #2c3945;
+    background:#0c1116; color:var(--text); font-size:14px;
+  }
+  .row{ display:flex; gap:10px; }
+  .row > div{ flex:1; }
+  button{ cursor:pointer; }
+  .btn{ padding:9px 14px; border-radius:8px; border:none; background:var(--accent); color:#08141d; font-weight:600; font-size:14px; }
+  .btn.secondary{ background:#2c3945; color:var(--text); }
+  .btn.danger{ background:var(--accent2); color:#2a0c0c; }
+
+  .roomCard{ border-top:1px solid #2c3945; padding:12px 0; }
+  .roomCard:first-child{ border-top:none; }
+  .roomCard .row{ margin-top:8px; }
+  .roomActions{ display:flex; justify-content:flex-end; margin-top:8px; }
+
+  #mapPreview{ position:relative; margin-top:10px; border-radius:10px; overflow:hidden; border:1px solid #2c3945; }
+  #mapPreview img{ width:100%; display:block; }
+  .marker{ position:absolute; width:14px; height:14px; border-radius:50%; background:var(--accent2);
+    transform:translate(-50%,-50%); border:2px solid #08141d; }
+
+  .hint{ font-size:12px; color:var(--muted); margin-top:8px; line-height:1.5; }
+  #downloadBar{ position:sticky; bottom:0; background:var(--bg); padding:12px 0; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>ניהול מפת בית הספר</h1>
+  <p>גישה פרטית - עריכת חדרים, כיול ותמונה</p>
+</header>
+
+<div id="loginScreen">
+  <label>סיסמה</label>
+  <input type="text" id="pwInput" placeholder="הכניסו סיסמה">
+  <button class="btn" id="loginBtn">כניסה</button>
+  <div id="loginError">סיסמה שגויה</div>
+  <div class="hint">
+    זו הגנה בסיסית בצד הדפדפן - טובה כדי שסתם אנשים לא יגיעו לזה בטעות,
+    אבל היא לא הגנה מלאה נגד מישהו שבאמת מנסה לפרוץ. תחליפו את הסיסמה בקוד למשהו שרק אתם יודעים.
+  </div>
+</div>
+
+<main id="mainApp">
+
+  <section>
+    <h2>תמונת המפה</h2>
+    <input type="file" id="mapFile" accept="image/*">
+    <div class="hint">בחרו את קובץ הלוויין/רחפן של בית הספר. שם הקובץ שיישמר בנתונים: school-map.jpg - שימו לב לשמור אותו בפועל באותו שם בתיקיית האתר.</div>
+    <div id="mapPreview" style="display:none">
+      <img id="mapImg">
+    </div>
+  </section>
+
+  <section>
+    <h2>כיול GPS (שתי נקודות ידועות)</h2>
+    <div class="hint">לחיצה ארוכה על נקודה בגוגל מפות מציגה lat,lng. בחרו שתי פינות מוכרות של בית הספר.</div>
+    <label>נקודה A - פינה שמאל-עליון</label>
+    <div class="row">
+      <div><label>Lat</label><input type="number" step="any" id="aLat"></div>
+      <div><label>Lng</label><input type="number" step="any" id="aLng"></div>
+    </div>
+    <label>נקודה B - פינה ימין-תחתון</label>
+    <div class="row">
+      <div><label>Lat</label><input type="number" step="any" id="bLat"></div>
+      <div><label>Lng</label><input type="number" step="any" id="bLng"></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>חדרים</h2>
+    <div id="roomList"></div>
+    <div class="roomActions">
+      <button class="btn secondary" id="addRoomBtn">+ הוספת חדר</button>
+    </div>
+    <div class="hint">אחוזי X/Y קובעים איפה הנקודה האדומה תופיע על התמונה (0=שמאל/למעלה, 100=ימין/למטה). תוכלו ללחוץ על התמונה למעלה כדי לראות תצוגה מקדימה - ערכו את המספרים עד שהנקודה תיפול על מיקום החדר האמיתי.</div>
+  </section>
+
+  <div id="downloadBar">
+    <button class="btn" id="downloadBtn" style="width:100%">הורדת data.json מעודכן</button>
+    <div class="hint">אחרי ההורדה, החליפו את קובץ data.json בתיקיית האתר בקובץ החדש שהורדתם - כך השינוי יופיע גם באתר הראשי.</div>
+  </div>
+
+</main>
+
+<script>
+/* ============================================================
+   סיסמה - תחליפו את זה למשהו שרק אתם יודעים
+   ============================================================ */
+const ADMIN_PASSWORD = "beit-sefer2026";
+
+document.getElementById("loginBtn").addEventListener("click", tryLogin);
+document.getElementById("pwInput").addEventListener("keydown", e => { if (e.key === "Enter") tryLogin(); });
+
+function tryLogin(){
+  const val = document.getElementById("pwInput").value;
+  if (val === ADMIN_PASSWORD){
+    document.getElementById("loginScreen").style.display = "none";
+    document.getElementById("mainApp").style.display = "block";
+    loadData();
+  } else {
+    document.getElementById("loginError").style.display = "block";
+  }
+}
+
+/* ============================================================
+   טעינת הנתונים הקיימים
+   ============================================================ */
+let DATA = { mapImage: "school-map.jpg", calibration: null, rooms: [] };
+let mapImageDataUrl = null;
+
+function loadData(){
+  fetch("data.json")
+    .then(r => r.json())
+    .then(d => {
+      DATA = d;
+      document.getElementById("aLat").value = d.calibration.pointA.lat;
+      document.getElementById("aLng").value = d.calibration.pointA.lng;
+      document.getElementById("bLat").value = d.calibration.pointB.lat;
+      document.getElementById("bLng").value = d.calibration.pointB.lng;
+      renderRooms();
+      const img = document.getElementById("mapImg");
+      img.src = d.mapImage;
+      img.onload = () => { document.getElementById("mapPreview").style.display = "block"; };
+    })
+    .catch(() => {
+      renderRooms();
+    });
+}
+
+/* ============================================================
+   עריכת תמונת המפה (תצוגה מקדימה בלבד - הקובץ עצמו נשמר ידנית)
+   ============================================================ */
+document.getElementById("mapFile").addEventListener("change", (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    mapImageDataUrl = reader.result;
+    const img = document.getElementById("mapImg");
+    img.src = mapImageDataUrl;
+    document.getElementById("mapPreview").style.display = "block";
+    renderMarkers();
+  };
+  reader.readAsDataURL(file);
+});
+
+/* ============================================================
+   רשימת חדרים
+   ============================================================ */
+function renderRooms(){
+  const list = document.getElementById("roomList");
+  list.innerHTML = "";
+  DATA.rooms.forEach((room, i) => {
+    const card = document.createElement("div");
+    card.className = "roomCard";
+    card.innerHTML = `
+      <label>שם/מספר חדר</label>
+      <input type="text" data-field="name" value="${escapeAttr(room.name)}">
+      <div class="row">
+        <div><label>X%</label><input type="number" min="0" max="100" data-field="xPercent" value="${room.xPercent}"></div>
+        <div><label>Y%</label><input type="number" min="0" max="100" data-field="yPercent" value="${room.yPercent}"></div>
+      </div>
+      <div class="roomActions">
+        <button class="btn danger removeBtn">הסרה</button>
+      </div>
+    `;
+    card.querySelectorAll("input").forEach(input => {
+      input.addEventListener("input", () => {
+        const field = input.dataset.field;
+        room[field] = field === "name" ? input.value : parseFloat(input.value) || 0;
+        if (field === "name") room.id = input.value;
+        renderMarkers();
+      });
+    });
+    card.querySelector(".removeBtn").addEventListener("click", () => {
+      DATA.rooms.splice(i, 1);
+      renderRooms();
+      renderMarkers();
+    });
+    list.appendChild(card);
+  });
+  renderMarkers();
+}
+
+document.getElementById("addRoomBtn").addEventListener("click", () => {
+  DATA.rooms.push({ id: "חדר חדש", name: "חדר חדש", xPercent: 50, yPercent: 50 });
+  renderRooms();
+});
+
+function renderMarkers(){
+  const preview = document.getElementById("mapPreview");
+  preview.querySelectorAll(".marker").forEach(m => m.remove());
+  DATA.rooms.forEach(room => {
+    const m = document.createElement("div");
+    m.className = "marker";
+    m.style.left = room.xPercent + "%";
+    m.style.top = room.yPercent + "%";
+    preview.appendChild(m);
+  });
+}
+
+function escapeAttr(s){
+  const d = document.createElement("div");
+  d.textContent = s;
+  return d.innerHTML.replace(/"/g, "&quot;");
+}
+
+/* ============================================================
+   הורדת data.json מעודכן
+   ============================================================ */
+document.getElementById("downloadBtn").addEventListener("click", () => {
+  DATA.calibration = {
+    pointA: { lat: parseFloat(document.getElementById("aLat").value), lng: parseFloat(document.getElementById("aLng").value), xPercent: 5, yPercent: 5 },
+    pointB: { lat: parseFloat(document.getElementById("bLat").value), lng: parseFloat(document.getElementById("bLng").value), xPercent: 95, yPercent: 95 }
+  };
+  const blob = new Blob([JSON.stringify(DATA, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "data.json";
+  a.click();
+  URL.revokeObjectURL(url);
+});
+</script>
+
+</body>
+</html>

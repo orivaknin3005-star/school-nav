@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ניווט בית ספר</title>
+<style>
+  :root{
+    --bg:#12181f;
+    --panel:#1b232c;
+    --accent:#4fb0ff;
+    --accent2:#ff5d5d;
+    --text:#e8edf2;
+    --muted:#8a97a3;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:-apple-system,"Segoe UI",Roboto,sans-serif;
+    background:var(--bg);
+    color:var(--text);
+  }
+  header{
+    padding:16px;
+    text-align:center;
+  }
+  header h1{ margin:0 0 4px; font-size:20px; }
+  header p{ margin:0; color:var(--muted); font-size:13px; }
+
+  #searchBar{
+    display:flex; gap:8px;
+    padding:0 16px 12px;
+  }
+  #searchInput{
+    flex:1; padding:10px 12px; border-radius:10px;
+    border:1px solid #2c3945; background:var(--panel); color:var(--text);
+    font-size:15px;
+  }
+  #searchBtn{
+    padding:10px 16px; border-radius:10px; border:none;
+    background:var(--accent); color:#08141d; font-weight:600;
+  }
+
+  #mapWrap{
+    position:relative; margin:0 16px; border-radius:14px; overflow:hidden;
+    border:1px solid #2c3945; background:#0c1116;
+  }
+  #mapImg{
+    width:100%; display:block; opacity:0.9;
+  }
+  #placeholderNote{
+    position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    text-align:center; padding:20px; color:var(--muted); font-size:13px;
+  }
+  .dot{
+    position:absolute; width:16px; height:16px; border-radius:50%;
+    transform:translate(-50%,-50%);
+    box-shadow:0 0 0 6px rgba(79,176,255,0.25);
+    transition:right .4s linear, top .4s linear;
+  }
+  #meDot{ background:var(--accent); }
+  #roomDot{ background:var(--accent2); box-shadow:0 0 0 6px rgba(255,93,93,0.25); }
+
+  #status{
+    padding:10px 16px; font-size:13px; color:var(--muted);
+  }
+
+  #panel{
+    margin:16px; padding:14px; background:var(--panel); border-radius:14px;
+    border:1px solid #2c3945;
+  }
+  #panel h2{ font-size:15px; margin:0 0 10px; }
+  .reviewItem{
+    padding:10px 0; border-top:1px solid #2c3945; font-size:14px;
+  }
+  .reviewItem:first-child{ border-top:none; }
+  .reviewItem img{ max-width:100%; border-radius:8px; margin-top:6px; }
+  .reviewMeta{ color:var(--muted); font-size:12px; margin-top:2px; }
+
+  #addReview{ margin-top:12px; display:flex; flex-direction:column; gap:8px; }
+  #addReview textarea{
+    resize:vertical; min-height:60px; padding:10px; border-radius:10px;
+    border:1px solid #2c3945; background:#0c1116; color:var(--text); font-size:14px;
+  }
+  .row{ display:flex; gap:8px; }
+  #addReview input[type=file]{ flex:1; color:var(--muted); font-size:12px; }
+  #addReview button{
+    padding:10px; border-radius:10px; border:none; background:var(--accent);
+    color:#08141d; font-weight:600;
+  }
+
+  .hint{ font-size:12px; color:var(--muted); margin-top:6px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>ניווט בית הספר</h1>
+  <p>חפשו חדר, ראו איפה אתם ואיפה הוא</p>
+</header>
+
+<div id="searchBar">
+  <input id="searchInput" placeholder="חפש חדר, לדוגמה: 214" />
+  <button id="searchBtn">חפש</button>
+</div>
+
+<div id="mapWrap">
+  <!-- ======================================================
+       החליפו את השורה הבאה בתמונת הלוויין/מפה האמיתית שלכם:
+       <img id="mapImg" src="school-map.jpg">
+       ======================================================= -->
+  <img id="mapImg" src="" style="display:none">
+  <div id="placeholderNote">
+    כאן תופיע מפת בית הספר.<br>
+    שימו קובץ תמונה בשם school-map.jpg באותה תיקייה, והחליפו את שורת ה-src למעלה בקוד.
+  </div>
+  <div id="meDot" class="dot" style="display:none"></div>
+  <div id="roomDot" class="dot" style="display:none"></div>
+</div>
+
+<div id="status">מיקום: ממתין להרשאה...</div>
+
+<div id="panel" style="display:none">
+  <h2 id="roomTitle"></h2>
+  <div id="reviewList"></div>
+
+  <div id="addReview">
+    <textarea id="reviewText" placeholder="כתבו הערה על החדר..."></textarea>
+    <div class="row">
+      <input id="reviewPhoto" type="file" accept="image/*" capture="environment">
+    </div>
+    <button id="saveReview">שמור הערה</button>
+    <div class="hint">ההערות נשמרות בטלפון הזה (localStorage). אם תרצו שכולם יראו את אותן הערות, נצטרך שרת/מסד נתונים משותף - זה השלב הבא.</div>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   1) הגדרת החדרים
+   כל חדר: שם, ומיקום כ"אחוז" בתוך התמונה (0-100), לא פיקסלים,
+   כדי שזה יעבוד בכל גודל מסך.
+   כרגע יש כאן ערכי דוגמה - תעדכנו לפי המפה האמיתית שלכם.
+   ============================================================ */
+const ROOMS = [
+  { id: "214", name: "חדר 214", xPercent: 62, yPercent: 30, lat: 31.9385, lng: 34.8365 },
+  { id: "118", name: "חדר 118", xPercent: 25, yPercent: 55, lat: 31.9383, lng: 34.8362 },
+  { id: "מזכירות", name: "מזכירות", xPercent: 45, yPercent: 12, lat: 31.9387, lng: 34.8364 },
+];
+
+/* ============================================================
+   2) כיול GPS -> פיקסל (Georeferencing)
+   כדי שנקודת ה-GPS שלכם תוצג נכון על התמונה, צריך שתי נקודות
+   ידועות: קואורדינטת GPS אמיתית + היכן היא נמצאת באחוזים בתמונה.
+   קחו שתי פינות מוכרות של בית הספר, בדקו את הקואורדינטות שלהן
+   בגוגל מפות (לחיצה ארוכה על המקום מציגה lat,lng), ומלאו כאן.
+   ============================================================ */
+const CALIBRATION = {
+  pointA: { lat: 31.9390, lng: 34.8360, xPercent: 5,  yPercent: 5  }, // פינה שמאל-עליון
+  pointB: { lat: 31.9380, lng: 34.8370, xPercent: 95, yPercent: 95 }  // פינה ימין-תחתון
+};
+
+function gpsToPercent(lat, lng){
+  const { pointA: a, pointB: b } = CALIBRATION;
+  const xPercent = a.xPercent + (lng - a.lng) / (b.lng - a.lng) * (b.xPercent - a.xPercent);
+  const yPercent = a.yPercent + (lat - a.lat) / (b.lat - a.lat) * (b.yPercent - a.yPercent);
+  return { xPercent, yPercent };
+}
+
+/* ============================================================
+   3) מעקב מיקום חי
+   ============================================================ */
+const meDot = document.getElementById("meDot");
+const statusEl = document.getElementById("status");
+
+function placeDot(el, xPercent, yPercent){
+  el.style.left = xPercent + "%";
+  el.style.top = yPercent + "%";
+  el.style.display = "block";
+}
+
+if ("geolocation" in navigator){
+  navigator.geolocation.watchPosition(
+    (pos) => {
+      const { latitude, longitude, accuracy } = pos.coords;
+      const { xPercent, yPercent } = gpsToPercent(latitude, longitude);
+      placeDot(meDot, xPercent, yPercent);
+      statusEl.textContent = `מיקום פעיל · דיוק ~${Math.round(accuracy)} מטר`;
+    },
+    (err) => {
+      statusEl.textContent = "לא ניתן לקבל מיקום: " + err.message + " (חייב HTTPS ואישור הרשאה)";
+    },
+    { enableHighAccuracy: true, maximumAge: 2000, timeout: 10000 }
+  );
+} else {
+  statusEl.textContent = "הדפדפן הזה לא תומך במיקום.";
+}
+
+/* ============================================================
+   4) חיפוש חדר
+   ============================================================ */
+const roomDot = document.getElementById("roomDot");
+const panel = document.getElementById("panel");
+const roomTitle = document.getElementById("roomTitle");
+let currentRoom = null;
+
+document.getElementById("searchBtn").addEventListener("click", doSearch);
+document.getElementById("searchInput").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") doSearch();
+});
+
+function doSearch(){
+  const q = document.getElementById("searchInput").value.trim().toLowerCase();
+  const room = ROOMS.find(r => r.id.toLowerCase() === q || r.name.toLowerCase().includes(q));
+  if (!room){
+    statusEl.textContent = "חדר לא נמצא. נסו: " + ROOMS.map(r => r.id).join(", ");
+    return;
+  }
+  currentRoom = room;
+  placeDot(roomDot, room.xPercent, room.yPercent);
+  roomTitle.textContent = room.name;
+  panel.style.display = "block";
+  renderReviews();
+}
+
+/* ============================================================
+   5) ביקורות + תמונות (נשמר מקומית בטלפון כרגע)
+   ============================================================ */
+function reviewsKey(roomId){ return "reviews_" + roomId; }
+
+function loadReviews(roomId){
+  return JSON.parse(localStorage.getItem(reviewsKey(roomId)) || "[]");
+}
+
+function renderReviews(){
+  const list = document.getElementById("reviewList");
+  const reviews = loadReviews(currentRoom.id);
+  if (reviews.length === 0){
+    list.innerHTML = '<div class="reviewItem">אין עדיין הערות לחדר הזה.</div>';
+    return;
+  }
+  list.innerHTML = reviews.map(r => `
+    <div class="reviewItem">
+      <div>${escapeHtml(r.text)}</div>
+      ${r.photo ? `<img src="${r.photo}">` : ""}
+      <div class="reviewMeta">${new Date(r.time).toLocaleString("he-IL")}</div>
+    </div>
+  `).join("");
+}
+
+function escapeHtml(s){
+  const d = document.createElement("div");
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+document.getElementById("saveReview").addEventListener("click", () => {
+  if (!currentRoom) return;
+  const text = document.getElementById("reviewText").value.trim();
+  const fileInput = document.getElementById("reviewPhoto");
+  const file = fileInput.files[0];
+
+  function save(photoDataUrl){
+    const reviews = loadReviews(currentRoom.id);
+    reviews.unshift({ text, photo: photoDataUrl || null, time: Date.now() });
+    localStorage.setItem(reviewsKey(currentRoom.id), JSON.stringify(reviews));
+    document.getElementById("reviewText").value = "";
+    fileInput.value = "";
+    renderReviews();
+  }
+
+  if (!text && !file){ return; }
+
+  if (file){
+    const reader = new FileReader();
+    reader.onload = () => save(reader.result);
+    reader.readAsDataURL(file);
+  } else {
+    save(null);
+  }
+});
+</script>
+
+</body>
+</html>

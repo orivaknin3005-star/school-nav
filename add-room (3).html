@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>הוספת חדר במיקום</title>
+<style>
+  :root{
+    --bg:#12181f; --panel:#1b232c; --accent:#4fb0ff; --accent2:#ff5d5d;
+    --text:#e8edf2; --muted:#8a97a3;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; font-family:-apple-system,"Segoe UI",Roboto,sans-serif;
+    background:var(--bg); color:var(--text); min-height:100vh;
+    display:flex; flex-direction:column;
+  }
+  header{ padding:16px; text-align:center; }
+  header h1{ margin:0 0 4px; font-size:20px; }
+  header p{ margin:0; color:var(--muted); font-size:13px; }
+
+  #statusBar{
+    text-align:center; padding:8px 16px; font-size:13px; color:var(--muted);
+  }
+  #statusBar.active{ color:var(--accent); }
+
+  #stage{
+    flex:1; display:flex; align-items:center; justify-content:center; flex-direction:column;
+    gap:16px; padding:20px;
+  }
+
+  .fab{
+    width:84px; height:84px; border-radius:50%;
+    background:var(--accent); color:#08141d; border:none;
+    font-size:38px; font-weight:300; line-height:1;
+    display:flex; align-items:center; justify-content:center;
+    box-shadow:0 4px 20px rgba(79,176,255,0.35);
+  }
+  .fab:active{ transform:scale(0.95); }
+  .fab.secondary{ background:var(--accent2); box-shadow:0 4px 20px rgba(255,93,93,0.35); }
+
+  .fabLabel{ font-size:14px; color:var(--muted); text-align:center; }
+  .coordsPreview{ font-size:12px; color:var(--muted); text-align:center; }
+
+  /* טופס הוספה */
+  #formOverlay{
+    display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6);
+    align-items:flex-end; justify-content:center; z-index:10;
+  }
+  #formCard{
+    width:100%; max-width:480px; background:var(--panel); border-radius:18px 18px 0 0;
+    padding:20px; border:1px solid #2c3945; border-bottom:none;
+  }
+  #formCard h2{ margin:0 0 12px; font-size:17px; }
+  #formCard label{ display:block; font-size:13px; color:var(--muted); margin:10px 0 4px; }
+  #formCard input[type=text]{
+    width:100%; padding:10px 12px; border-radius:10px; border:1px solid #2c3945;
+    background:#0c1116; color:var(--text); font-size:15px;
+  }
+  #formCard input[type=file]{ width:100%; color:var(--muted); font-size:13px; }
+  .photoButtons{ display:flex; gap:8px; }
+  .photoBtn{
+    flex:1; padding:10px 8px; border-radius:10px; border:1px solid #2c3945;
+    background:#0c1116; color:var(--text); font-size:13px; font-weight:600;
+  }
+  .photoBtn:active{ background:#2c3945; }
+  #photoPreview{ max-width:100%; border-radius:10px; margin-top:8px; display:none; }
+  .formButtons{ display:flex; gap:10px; margin-top:16px; }
+  .formButtons button{
+    flex:1; padding:12px; border-radius:10px; border:none; font-weight:600; font-size:15px;
+  }
+  #cancelBtn{ background:#2c3945; color:var(--text); }
+  #confirmBtn{ background:var(--accent); color:#08141d; }
+  #confirmBtn:disabled{ opacity:0.5; }
+
+  /* רשימת חדרים שנוספו */
+  #savedList{ padding:0 16px 24px; }
+  #savedList h2{ font-size:15px; color:var(--muted); margin:0 0 10px; }
+  .savedItem{
+    display:flex; gap:10px; align-items:center; padding:10px; background:var(--panel);
+    border-radius:12px; border:1px solid #2c3945; margin-bottom:8px;
+  }
+  .savedItem img{ width:48px; height:48px; object-fit:cover; border-radius:8px; }
+  .savedItem .info{ flex:1; }
+  .savedItem .name{ font-size:14px; font-weight:600; }
+  .savedItem .meta{ font-size:11px; color:var(--muted); }
+
+  #downloadBar{ padding:12px 16px 30px; }
+  #downloadBar button{
+    width:100%; padding:12px; border-radius:10px; border:none;
+    background:#2c3945; color:var(--text); font-weight:600; font-size:14px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>הוספת חדר במיקום</h1>
+  <p>עמדו במקום הרצוי ולחצו הוספה</p>
+</header>
+
+<div id="statusBar">מיקום: לא פעיל</div>
+
+<div id="stage">
+  <button class="fab" id="permBtn">+</button>
+  <div class="fabLabel" id="stageLabel">לחצו כאן כדי לאשר מיקום</div>
+  <div class="coordsPreview" id="coordsPreview"></div>
+</div>
+
+<div id="savedList"></div>
+
+<div id="downloadBar">
+  <button id="downloadBtn">הורדת כל החדרים כקובץ (rooms.json)</button>
+</div>
+
+<!-- טופס הוספה -->
+<div id="formOverlay">
+  <div id="formCard">
+    <h2>חדר חדש במיקום הנוכחי</h2>
+    <div class="coordsPreview" id="formCoords"></div>
+
+    <label>מספר / שם חדר</label>
+    <input type="text" id="roomName" placeholder="לדוגמה: 214">
+
+    <label>תמונה</label>
+    <div class="photoButtons">
+      <button type="button" id="takePhotoBtn" class="photoBtn">📷 צילום עכשיו</button>
+      <button type="button" id="pickPhotoBtn" class="photoBtn">🖼️ העלאה מהגלריה</button>
+    </div>
+    <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display:none">
+    <input type="file" id="galleryInput" accept="image/*" style="display:none">
+    <img id="photoPreview">
+
+    <div class="formButtons">
+      <button id="cancelBtn">ביטול</button>
+      <button id="confirmBtn">שמירה</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let watchId = null;
+let currentPos = null; // { lat, lng, accuracy }
+let capturedPhoto = null;
+
+const statusBar = document.getElementById("statusBar");
+const stageLabel = document.getElementById("stageLabel");
+const permBtn = document.getElementById("permBtn");
+const coordsPreview = document.getElementById("coordsPreview");
+
+const STORAGE_KEY = "addedRooms";
+
+/* ============================================================
+   שלב 1: כפתור הפלוס - בקשת הרשאת מיקום
+   ============================================================ */
+permBtn.addEventListener("click", () => {
+  if (watchId !== null){
+    // כבר פעיל -> זה הפך לכפתור "הוספה"
+    openForm();
+    return;
+  }
+
+  if (!("geolocation" in navigator)){
+    statusBar.textContent = "הדפדפן לא תומך במיקום";
+    return;
+  }
+
+  statusBar.textContent = "מבקש הרשאת מיקום...";
+
+  watchId = navigator.geolocation.watchPosition(
+    (pos) => {
+      currentPos = {
+        lat: pos.coords.latitude,
+        lng: pos.coords.longitude,
+        accuracy: pos.coords.accuracy
+      };
+      statusBar.textContent = `מיקום פעיל · דיוק ~${Math.round(currentPos.accuracy)} מטר`;
+      statusBar.classList.add("active");
+      coordsPreview.textContent = `${currentPos.lat.toFixed(6)}, ${currentPos.lng.toFixed(6)}`;
+
+      // אחרי שיש מיקום, הכפתור הופך ל"הוספה"
+      permBtn.classList.add("secondary");
+      permBtn.textContent = "＋";
+      stageLabel.textContent = "עמדו במקום הרצוי ולחצו כאן להוספה";
+    },
+    (err) => {
+      statusBar.textContent = "לא ניתן לקבל מיקום: " + err.message;
+    },
+    { enableHighAccuracy: true, maximumAge: 1000, timeout: 15000 }
+  );
+});
+
+/* ============================================================
+   שלב 2: פתיחת טופס ההוספה
+   ============================================================ */
+const formOverlay = document.getElementById("formOverlay");
+const formCoords = document.getElementById("formCoords");
+const roomNameInput = document.getElementById("roomName");
+const cameraInput = document.getElementById("cameraInput");
+const galleryInput = document.getElementById("galleryInput");
+const photoPreview = document.getElementById("photoPreview");
+const confirmBtn = document.getElementById("confirmBtn");
+
+function openForm(){
+  if (!currentPos){
+    statusBar.textContent = "עדיין אין מיקום מדויק, המתינו רגע ונסו שוב";
+    return;
+  }
+  formCoords.textContent = `מיקום שיישמר: ${currentPos.lat.toFixed(6)}, ${currentPos.lng.toFixed(6)} (דיוק ~${Math.round(currentPos.accuracy)}מ')`;
+  roomNameInput.value = "";
+  cameraInput.value = "";
+  galleryInput.value = "";
+  photoPreview.style.display = "none";
+  capturedPhoto = null;
+  formOverlay.style.display = "flex";
+}
+
+document.getElementById("cancelBtn").addEventListener("click", () => {
+  formOverlay.style.display = "none";
+});
+
+// כפתור "צילום עכשיו" - פותח את המצלמה ישירות (אחרי אישור הדפדפן)
+document.getElementById("takePhotoBtn").addEventListener("click", () => {
+  cameraInput.click();
+});
+
+// כפתור "העלאה מהגלריה" - פותח את בורר הקבצים הרגיל
+document.getElementById("pickPhotoBtn").addEventListener("click", () => {
+  galleryInput.click();
+});
+
+function handlePhotoFile(file){
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    capturedPhoto = reader.result;
+    photoPreview.src = capturedPhoto;
+    photoPreview.style.display = "block";
+  };
+  reader.readAsDataURL(file);
+}
+
+cameraInput.addEventListener("change", (e) => handlePhotoFile(e.target.files[0]));
+galleryInput.addEventListener("change", (e) => handlePhotoFile(e.target.files[0]));
+
+/* ============================================================
+   שלב 3: שמירה
+   ============================================================ */
+confirmBtn.addEventListener("click", () => {
+  const name = roomNameInput.value.trim();
+  if (!name){
+    roomNameInput.focus();
+    return;
+  }
+  const entry = {
+    id: name,
+    name: name,
+    lat: currentPos.lat,
+    lng: currentPos.lng,
+    accuracy: currentPos.accuracy,
+    photo: capturedPhoto,
+    time: Date.now()
+  };
+  const list = loadRooms();
+  list.unshift(entry);
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+  formOverlay.style.display = "none";
+  renderSaved();
+});
+
+/* ============================================================
+   רשימת חדרים שנוספו
+   ============================================================ */
+function loadRooms(){
+  return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+}
+
+function renderSaved(){
+  const container = document.getElementById("savedList");
+  const rooms = loadRooms();
+  if (rooms.length === 0){
+    container.innerHTML = "";
+    return;
+  }
+  container.innerHTML = "<h2>חדרים שנוספו (" + rooms.length + ")</h2>" +
+    rooms.map(r => `
+      <div class="savedItem">
+        ${r.photo ? `<img src="${r.photo}">` : `<div style="width:48px;height:48px;background:#2c3945;border-radius:8px;"></div>`}
+        <div class="info">
+          <div class="name">${escapeHtml(r.name)}</div>
+          <div class="meta">${r.lat.toFixed(6)}, ${r.lng.toFixed(6)} · ${new Date(r.time).toLocaleString("he-IL")}</div>
+        </div>
+      </div>
+    `).join("");
+}
+
+function escapeHtml(s){
+  const d = document.createElement("div");
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+/* ============================================================
+   הורדת קובץ rooms.json
+   ============================================================ */
+document.getElementById("downloadBtn").addEventListener("click", () => {
+  const rooms = loadRooms();
+  const blob = new Blob([JSON.stringify(rooms, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "rooms.json";
+  a.click();
+  URL.revokeObjectURL(url);
+});
+
+renderSaved();
+</script>
+
+</body>
+</html>
